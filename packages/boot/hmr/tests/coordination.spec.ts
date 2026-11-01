@@ -59,6 +59,19 @@ it('serializes mutations, rejects nesting and keeps the queue usable after failu
   expect(order).toEqual([1, 2])
 })
 
+it('admits a mutation from async work that outlived the transaction which started it', async () => {
+  const { hmr } = await fixture()
+  const finished = Promise.withResolvers<undefined>()
+  let later: Promise<string> | undefined
+  // A plugin a reload starts opens a long-lived resource; that resource's callbacks run in the reload's async context.
+  await hmr.runExclusive(async () => {
+    void finished.promise.then(() => { later = hmr.runExclusive(async () => 'written') })
+  })
+  finished.resolve(undefined)
+  await vi.waitFor(() => { expect(later).toBeDefined() })
+  await expect(later).resolves.toBe('written')
+})
+
 it('holds configuration handlers behind configuration mutations', async () => {
   const { hmr, dir } = await fixture()
   const filename = join(dir, 'package.json')
